@@ -31,6 +31,14 @@ var intersect_line_box = function(p1, p2, boxTuple)
         false
 }
 
+const rarityToColor = {
+    0: '#CCCCCC',
+    1: 'green',
+    2: 'blue',
+    3: 'pink',
+    4: 'yellow',
+}
+
 var Renderer = function(canvas){
     var canvas = $(canvas).get(0)
     var ctx = canvas.getContext("2d");
@@ -75,8 +83,8 @@ var Renderer = function(canvas){
             // node: {mass:#, p:{x,y}, name:"", data:{}}
             // pt:   {x:#, y:#}  node position in screen coords
             // draw a rectangle centered at pt
-            var w = 10
-            ctx.fillStyle = (node.data.alone) ? "orange" : "black"
+            var w = 10 * (node.data?.rarity ?? 1)
+            ctx.fillStyle = rarityToColor[node.data?.rarity] ?? 'black'
             ctx.fillRect(pt.x-w/2, pt.y-w/2, w,w)
 
             var label = node.data.name ? $.trim(node.data.name) : '';
@@ -93,7 +101,7 @@ var Renderer = function(canvas){
             }
 
 
-            nodeBoxes[node.name] = [pt.x-w/2, pt.y-11, w, 22]
+            nodeBoxes[node.name] = [pt.x-w/2, pt.y-w-1, w, (w+1)*2]
           })  
 
         particleSystem.eachEdge(function(edge, pt1, pt2){
@@ -104,7 +112,7 @@ var Renderer = function(canvas){
               const mid_y = (tail.y+head.y)/2;
               ctx.save();
                   var w = 10
-                  ctx.fillStyle = "gray"
+                  ctx.fillStyle = "#CCCCCC"
                   ctx.fillRect(mid_x-w, mid_y-(3*w/2), 2*w,2*w)
                   ctx.font = "1.1em Arial";
                   ctx.textAlign = "center";
@@ -189,8 +197,7 @@ var Renderer = function(canvas){
 
           dropped:function(e){
             if (dragged===null || dragged.node===undefined) return
-            if (dragged.node !== null) dragged.node.fixed = false
-            dragged.node.tempMass = 1000
+            console.log(dragged.node.p.x, dragged.node.p.y)
             dragged = null
             $(canvas).unbind('mousemove', handler.dragged)
             $(window).unbind('mouseup', handler.dropped)
@@ -208,8 +215,10 @@ var Renderer = function(canvas){
     return that
   }    
 
+let xHandler = -8
+
 export default function render() {    
-    var sys = arbor.ParticleSystem(1000, 600, 0.5) // create the system with sensible repulsion/stiffness/friction
+    var sys = arbor.ParticleSystem(6000, 600, 0.5) // create the system with sensible repulsion/stiffness/friction
     sys.parameters({gravity:true}) // use center-gravity to make the graph settle nicely (ymmv)
     sys.renderer = Renderer("#viewport") // our newly created renderer will have its .init() method called shortly by sys...
 
@@ -227,8 +236,10 @@ export default function render() {
     // }, {})
     Object.values(formulas).forEach(f => {
         formulas[f.formulaId].item = items[f.itemId]
+        items[f.itemId].madeByCrafting = true
         Object.entries(f.costs).forEach(c => {
             formulas[f.formulaId].costs[c[0]].item = items[c[1].id]
+            items[c[1].id].usedInCrafting = true
         })
     })
 
@@ -243,8 +254,22 @@ export default function render() {
         }
     })
 
+    const _addNode = (item) => {
+        sys.addNode(item.itemId, {
+            name: item.name,
+            mass: item.rarity + 1, 
+            x: item.rarity === 4 ? xHandler : undefined,
+            // y: item.rarity,
+            fixed: item.rarity === 4, 
+            rarity: item.rarity
+        })
+        if (item.rarity === 4) xHandler += 4
+    }
+
     const addCraftingMaterialNode = (item) => {
-        sys.addNode(item.itemId, {name: item.name})
+        if (!sys.getNode(item.itemId)) {
+            _addNode(item)
+        }
         const creationMethod = item.buildingProductList?.[0]
         if (creationMethod?.roomType === 'WORKSHOP') {
             const costs = creationMethod.formula.costs
@@ -255,7 +280,7 @@ export default function render() {
                 // sys.addEdge(item.itemId, intermediateNodeName)
                 // sys.addEdge(intermediateNodeName, c.id)
                 if (!sys.getNode(c.id)) {
-                    sys.addNode(c.id, {name: c.item.name})
+                    _addNode(c.item)
                 }
                 sys.addEdge(item.itemId, c.id, {count: c.count})
             })
@@ -265,7 +290,7 @@ export default function render() {
     window.items = items
     window.formulas = formulas
 
-    addCraftingMaterialNode(items[30054])
+    Object.values(items).filter(i => i.usedInCrafting || i.madeByCrafting).forEach(i => addCraftingMaterialNode(i))
 
     // or, equivalently:
     //

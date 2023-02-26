@@ -219,12 +219,14 @@ var Renderer = function(canvas){
     return that
   }    
 
-let xHandler = [60, 60, 65, 85, 300]
+let xHandler = [60, 60, 70, 85, 300]
 let xHandlerDiff = [310, 310, 118, 108, 300]
 let rarityCount = [0, 0, 0, 0, 0]
 
 const customPoints = {
-    "Compound Cutting Fluid": {x: 1500, y: 800}
+    "Semi-Synthetic Solvent": {x: 1600, y: 500},
+    "Crystalline Component": {x: 1400, y: 775},
+    "Compound Cutting Fluid": {x: 1600, y: 775},
 }
 const customPointsList = Object.keys(customPoints)
 
@@ -281,10 +283,10 @@ export default function render() {
 
         if (!customPointsList.includes(item.name)) {
             itemParams.rx = xHandler[item.rarity]
-            itemParams.ry = 50 + item.rarity * 180
+            itemParams.ry = 50 + item.rarity * 190
             if (item.rarity === 2 || item.rarity === 3) {
                 if (rarityCount[item.rarity] % 2 === 0) {
-                    itemParams.ry += 50
+                    itemParams.ry += 75
                 }
             }
             xHandler[item.rarity] += xHandlerDiff[item.rarity]

@@ -79,7 +79,8 @@ var Renderer = function(canvas){
         
         var nodeBoxes = {}
 
-        particleSystem.eachNode(function(node, pt){
+        particleSystem.eachNode(function(node, pt1){
+            const pt = {x: node.data.rx, y: node.data.ry}
             // node: {mass:#, p:{x,y}, name:"", data:{}}
             // pt:   {x:#, y:#}  node position in screen coords
             // draw a rectangle centered at pt
@@ -104,15 +105,17 @@ var Renderer = function(canvas){
             nodeBoxes[node.name] = [pt.x-w/2, pt.y-w-1, w, (w+1)*2]
           })  
 
-        particleSystem.eachEdge(function(edge, pt1, pt2){
+        particleSystem.eachEdge(function(edge, pt11, pt22){
+            const pt1 = {x: edge.source.data.rx, y: edge.source.data.ry}
+            const pt2 = {x: edge.target.data.rx, y: edge.target.data.ry}
             var head = pt1, tail = pt2
             var label = edge.data.count ? $.trim(edge.data.count) : '';
             if (label != '' && ctx){
-              const mid_x = (tail.x+head.x)/2;
-              const mid_y = (tail.y+head.y)/2;
+              const mid_x = (tail.x+head.x+head.x+head.x)/4;
+              const mid_y = (tail.y+head.y+head.y+head.y)/4;
               ctx.save();
                   var w = 10
-                  ctx.fillStyle = "#CCCCCC"
+                  ctx.fillStyle = edge.source.data.highlighted ? "orange" : "#CCCCCC"
                   ctx.fillRect(mid_x-w, mid_y-(3*w/2), 2*w,2*w)
                   ctx.font = "1.1em Arial";
                   ctx.textAlign = "center";
@@ -198,6 +201,7 @@ var Renderer = function(canvas){
           dropped:function(e){
             if (dragged===null || dragged.node===undefined) return
             console.log(dragged.node.p.x, dragged.node.p.y)
+            dragged.node.data.highlighted = false
             dragged = null
             $(canvas).unbind('mousemove', handler.dragged)
             $(window).unbind('mouseup', handler.dropped)
@@ -215,7 +219,14 @@ var Renderer = function(canvas){
     return that
   }    
 
-let xHandler = -8
+let xHandler = [60, 60, 65, 85, 300]
+let xHandlerDiff = [310, 310, 118, 108, 300]
+let rarityCount = [0, 0, 0, 0, 0]
+
+const customPoints = {
+    "Compound Cutting Fluid": {x: 1500, y: 800}
+}
+const customPointsList = Object.keys(customPoints)
 
 export default function render() {    
     var sys = arbor.ParticleSystem(6000, 600, 0.5) // create the system with sensible repulsion/stiffness/friction
@@ -255,15 +266,36 @@ export default function render() {
     })
 
     const _addNode = (item) => {
-        sys.addNode(item.itemId, {
+        const itemParams = {
             name: item.name,
             mass: item.rarity + 1, 
-            x: item.rarity === 4 ? xHandler : undefined,
-            // y: item.rarity,
-            fixed: item.rarity === 4, 
+            fixed: true,
             rarity: item.rarity
-        })
-        if (item.rarity === 4) xHandler += 4
+        }
+
+        if (item.rarity === 4) {
+            itemParams.x = xHandler[item.rarity]
+        } else {
+            itemParams.y = item.rarity * 4
+        }
+
+        if (!customPointsList.includes(item.name)) {
+            itemParams.rx = xHandler[item.rarity]
+            itemParams.ry = 50 + item.rarity * 180
+            if (item.rarity === 2 || item.rarity === 3) {
+                if (rarityCount[item.rarity] % 2 === 0) {
+                    itemParams.ry += 50
+                }
+            }
+            xHandler[item.rarity] += xHandlerDiff[item.rarity]
+            rarityCount[item.rarity] += 1
+        } else {
+            const {x, y} = customPoints[item.name]
+            itemParams.rx = x
+            itemParams.ry = y
+        }
+
+        sys.addNode(item.itemId, itemParams)
     }
 
     const addCraftingMaterialNode = (item) => {
@@ -274,11 +306,6 @@ export default function render() {
         if (creationMethod?.roomType === 'WORKSHOP') {
             const costs = creationMethod.formula.costs
             costs.forEach(c => {
-                // // add intermediate node
-                // const intermediateNodeName = `${item.itemId}->${c.id}`
-                // sys.addNode(intermediateNodeName, {count: c.count})
-                // sys.addEdge(item.itemId, intermediateNodeName)
-                // sys.addEdge(intermediateNodeName, c.id)
                 if (!sys.getNode(c.id)) {
                     _addNode(c.item)
                 }
@@ -290,7 +317,39 @@ export default function render() {
     window.items = items
     window.formulas = formulas
 
-    Object.values(items).filter(i => i.usedInCrafting || i.madeByCrafting).forEach(i => addCraftingMaterialNode(i))
+    const objectBlackList = [
+        'Carbon Stick',
+        'Carbon Brick',
+        'Light Building Material',
+        'Concrete Building Material',
+        'Carbon Pack',
+        'Reinforced Building Material',
+        'Furniture Part',
+        'Skill Summary - 1',
+        'Skill Summary - 2',
+        'Skill Summary - 3',
+    ]
+
+    const stuff = Object.values(items).filter(i => (i.usedInCrafting || i.madeByCrafting) && !i.name.includes(' Chip') && objectBlackList.indexOf(i.name) === -1)
+    window.stuff = stuff
+
+    const ords = [
+        ['Orirock', 'Ester', 'Oriron Shard', 'Sugar Substitute', 'Diketon', 'Damaged Device'],
+        ['Orirock Cube', 'Polyester', 'Oriron', 'Sugar', 'Polyketon', 'Device'],
+        ['Manganese Ore', 'Orirock Cluster', 'Loxic Kohl', 'Polyester Pack', 'Grindstone', 'Oriron Cluster', 'RMA70-12',  'Sugar Pack',  'Coagulating Gel', 'Aketon',  'Incandescent Alloy', 'Integrated Device', 'Crystalline Component', 'Semi-Synthetic Solvent', 'Compound Cutting Fluid'],
+        ['Orirock Concentration', 'Sugar Lump', 'Polyester Lump', 'Oriron Block', 'Keton Colloid', 'Optimized Device', 'White Horse Kohl', 'Manganese Trihydrate', 'Grindstone Pentahydrate', 'RMA70-24', 'Polymerized Gel', 'Incandescent Alloy Block', 'Crystalline Circuit', 'Refined Solvent', 'Cutting Fluid Solution'],
+        ['Polymerization Preparation', 'Bipolar Nanoflake', 'D32 Steel', 'Crystalline Electronic Unit'],
+    ]
+
+    const ord = ords.reduce((acc, cur) => {
+        return acc.concat(cur)
+    }, [])
+
+    console.log(ord)
+
+    const organizedStuff = ord.map(o => stuff.find(s => s.name === o))
+
+    organizedStuff.forEach(i => addCraftingMaterialNode(i))
 
     // or, equivalently:
     //
